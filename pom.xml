@@ -224,4 +224,15 @@
     <maven>3.0.3</maven>
   </prerequisites>
 
+          <distributionManagement>
+        <repository>
+            <id>bgame-releases</id>
+            <url>http://172.16.59.137:8081/repository/register-releases/</url>
+        </repository>
+        <snapshotRepository>
+            <id>bgame-snapshots</id>
+            <url>http://172.16.59.137:8081/repository/register-snapshots/</url>
+        </snapshotRepository>
+    </distributionManagement>
+
 </project>
