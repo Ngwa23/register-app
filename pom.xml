@@ -21,13 +21,16 @@
     <module>webapp</module>
   </modules>
 
-  <distributionManagement>
-    <site>
-      <id>site-server</id>
-      <name>Test Project Site</name>
-      <url>file:///tmp/maven-project-site</url>
-    </site>
-  </distributionManagement>
+   <distributionManagement>
+        <repository>
+            <id>bgame-releases</id>
+            <url>http://172.16.59.137:8081/repository/register-releases/</url>
+        </repository>
+        <snapshotRepository>
+            <id>bgame-snapshots</id>
+            <url>http://172.16.59.137:8081/repository/register-snapshots/</url>
+        </snapshotRepository>
+    </distributionManagement>
 
   <build>
     <plugins>
