@@ -8,6 +8,7 @@ pipeline {
 
     environment {
         SCANNER_HOME= tool 'sonar-scanner'
+        JENKINS_API_TOKEN = credentials("JENKINS_API-TOKEN")
     }
 
     stages {
