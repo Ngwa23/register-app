@@ -8,7 +8,6 @@ pipeline {
 
     environment {
         SCANNER_HOME= tool 'sonar-scanner'
-        JENKINS_API_TOKEN = credentials("JENKINS_API-TOKEN")
     }
 
     stages {
@@ -39,7 +38,7 @@ pipeline {
         stage('SonarQube Analsyis') {
             steps {
                 withSonarQubeEnv('sonar') {
-                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Registrationapp -Dsonar.projectKey=Registrationapp \
+                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Register -Dsonar.projectKey=Register \
                             -Dsonar.java.binaries=. '''
                 }
             }
@@ -61,7 +60,7 @@ pipeline {
         /*
        stage('Publish To Nexus') {
             steps {
-             withMaven(globalMavenSettingsConfig: 'global-settings02', jdk: 'jdk17', maven: 'maven3', mavenSettingsConfig: '', traceability: true) {
+             withMaven(globalMavenSettingsConfig: 'global-settings01', jdk: 'jdk17', maven: 'maven3', mavenSettingsConfig: '', traceability: true) {
                // some block
                   sh "mvn deploy"
                 }
@@ -76,7 +75,7 @@ pipeline {
                  // This step should not normally be used in your script. Consult the inline help for details.
                   withDockerRegistry(credentialsId: 'docker-credentials', toolName: 'docker') {
                       // some block
-                   sh "docker build -t ngwa23/registrationapp:v1 . "
+                   sh "docker build -t ngwa23/registrationapp:v5 . "
                        
                    }
                 }
@@ -86,7 +85,7 @@ pipeline {
         
         stage('Docker Image Scan') {
             steps {
-                sh "trivy image --format table -o trivy-image-report.html  ngwa23/registrationapp:v1 "
+                sh "trivy image --format table -o trivy-image-report.html ngwa23/registrationapp:v5 "
             }
         }
         
@@ -96,7 +95,7 @@ pipeline {
                    // This step should not normally be used in your script. Consult the inline help for details.
                    withDockerRegistry(credentialsId: 'docker-credentials', toolName: 'docker') {
                     // some block
-                sh "docker push  ngwa23/registrationapp:v1"    
+                sh "docker push  ngwa23/registrationapp:v5"    
              }
             
             }
@@ -106,7 +105,7 @@ pipeline {
         
         stage('RemoveDockerImages'){
             steps {
-            sh 'docker rmi -f ngwa23/registrationapp:v1'
+            sh 'docker rmi -f ngwa23/registrationapp:v5'
              }
         }
         
@@ -118,21 +117,14 @@ pipeline {
       }
      }
         } 
-       stage("Trigger CD Pipeline") {
-            steps {
-                script {
-                    sh "curl -v -k --user NGWA CLOVIS OCHANG:${JENKINS_API_TOKEN} -X POST -H 'cache-control: no-cache' -H 'content-type: application/x-www-form-urlencoded' --data 'IMAGE_TAG=${IMAGE_TAG}' 'http://192.168.244.145:8080/job/REGISTRATION-APP-CD/buildWithParameters?token=gitops-token'"
-                }
-            }
-       }
         
-         /*
         stage('Deploy To Kubernetes') {
             steps {
-            withKubeConfig(caCertificate: '', clusterName: 'kubernetes', contextName: '', credentialsId: 'k8s-cred', namespace: 'webapps', restrictKubeConfigAccess: false, serverUrl: 'https://172.16.59.134:6443') {
+            withKubeConfig(caCertificate: '', clusterName: 'kubernetes', contextName: '', credentialsId: 'k8s-cred', namespace: 'webapps', restrictKubeConfigAccess: false, serverUrl: 'https://192.168.244.144:6443') {
               // some block
 
-                 sh "kubectl apply -f deployment-service.yaml"  
+                 sh "kubectl apply -f  service.yaml"
+                 sh "kubectl apply -f deployment.yaml" 
                 }
             }
         }
@@ -141,17 +133,19 @@ pipeline {
         
         stage('Verify the Deployment') {
             steps {
-              withKubeConfig(caCertificate: '', clusterName: 'kubernetes', contextName: '', credentialsId: 'k8s-cred', namespace: 'webapps', restrictKubeConfigAccess: false, serverUrl: 'https://172.16.59.134:6443') {
+              withKubeConfig(caCertificate: '', clusterName: 'kubernetes', contextName: '', credentialsId: 'k8s-cred', namespace: 'webapps', restrictKubeConfigAccess: false, serverUrl: 'https://192.168.244.144:6443') {
                // some block
 
                     sh "kubectl get pods -n webapps"
                    sh "kubectl get svc -n webapps"
+                   sh "kubectl get ep -n webapps"
+                   sh "kubectl get rs -n webapps"
+                   sh "kubectl get deploy -n webapps"
                 }
              }
         }
-        */
-     }  
-     
+        
+     }    
     post {
     always {
         script {
@@ -183,8 +177,8 @@ pipeline {
                 mimeType: 'text/html',
                 attachmentsPattern: 'trivy-image-report.html'
             )
-       }
+        }
     }
 }
-}
 
+}
