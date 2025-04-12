@@ -1,115 +1,189 @@
 pipeline {
-    agent { label 'Jenkins-Agent' }
+    agent any
+    
     tools {
-        jdk 'Java17'
-        maven 'Maven3'
+        jdk 'jdk17'
+        maven 'maven3'
     }
+
     environment {
-	    APP_NAME = "register-app-pipeline"
-            RELEASE = "1.0.0"
-            DOCKER_USER = "ashfaque9x"
-            DOCKER_PASS = 'dockerhub'
-            IMAGE_NAME = "${DOCKER_USER}" + "/" + "${APP_NAME}"
-            IMAGE_TAG = "${RELEASE}-${BUILD_NUMBER}"
-	    JENKINS_API_TOKEN = credentials("JENKINS_API_TOKEN")
+        SCANNER_HOME= tool 'sonar-scanner'
     }
-    stages{
-        stage("Cleanup Workspace"){
-                steps {
-                cleanWs()
-                }
-        }
 
-        stage("Checkout from SCM"){
-                steps {
-                    git branch: 'main', credentialsId: 'github', url: 'https://github.com/Ashfaque-9x/register-app'
-                }
-        }
-
-        stage("Build Application"){
+    stages {
+        stage('Git Checkout') {
             steps {
-                sh "mvn clean package"
+             git branch: 'main', credentialsId: 'git-cred', url: 'https://github.com/Ngwa23/register-app.git'
             }
-
-       }
-
-       stage("Test Application"){
-           steps {
-                 sh "mvn test"
-           }
-       }
-
-       stage("SonarQube Analysis"){
-           steps {
-	           script {
-		        withSonarQubeEnv(credentialsId: 'jenkins-sonarqube-token') { 
-                        sh "mvn sonar:sonar"
-		        }
-	           }	
-           }
-       }
-
-       stage("Quality Gate"){
-           steps {
-               script {
-                    waitForQualityGate abortPipeline: false, credentialsId: 'jenkins-sonarqube-token'
-                }	
-            }
-
         }
-
-        stage("Build & Push Docker Image") {
+        
+        stage('Compile') {
+            steps {
+                sh "mvn compile"
+            }
+        }
+        
+        stage('Test') {
+            steps {
+                sh "mvn test"
+            }
+        }
+        
+        stage('File System Scan') {
+            steps {
+                sh "trivy fs --format table -o trivy-fs-report.html ."
+            }
+        }
+        
+        stage('SonarQube Analsyis') {
+            steps {
+                withSonarQubeEnv('sonar') {
+                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Registrationapp -Dsonar.projectKey=Registrationapp \
+                            -Dsonar.java.binaries=. '''
+                }
+            }
+        }
+        
+        stage('Quality Gate') {
             steps {
                 script {
-                    docker.withRegistry('',DOCKER_PASS) {
-                        docker_image = docker.build "${IMAGE_NAME}"
-                    }
-
-                    docker.withRegistry('',DOCKER_PASS) {
-                        docker_image.push("${IMAGE_TAG}")
-                        docker_image.push('latest')
-                    }
+                  waitForQualityGate abortPipeline: false, credentialsId: 'sonar-token' 
                 }
             }
-
-       }
-
-       stage("Trivy Scan") {
-           steps {
+        }
+        
+        stage('Build') {
+            steps {
+               sh "mvn package"
+            }
+        }
+        /*
+       stage('Publish To Nexus') {
+            steps {
+             withMaven(globalMavenSettingsConfig: 'global-settings02', jdk: 'jdk17', maven: 'maven3', mavenSettingsConfig: '', traceability: true) {
+               // some block
+                  sh "mvn deploy"
+                }
+                    
+            }
+        }
+        
+        */
+        stage('Build & Tag Docker Image') {
+            steps {
                script {
-	            sh ('docker run -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image ashfaque9x/register-app-pipeline:latest --no-progress --scanners vuln  --exit-code 0 --severity HIGH,CRITICAL --format table')
-               }
-           }
-       }
-
-       stage ('Cleanup Artifacts') {
-           steps {
+                 // This step should not normally be used in your script. Consult the inline help for details.
+                  withDockerRegistry(credentialsId: 'docker-credentials', toolName: 'docker') {
+                      // some block
+                   sh "docker build -t ngwa23/registrationapp:v1 . "
+                       
+                   }
+                }
+            }
+        
+        }
+        
+        stage('Docker Image Scan') {
+            steps {
+                sh "trivy image --format table -o trivy-image-report.html  ngwa23/registrationapp:v1 "
+            }
+        }
+        
+        stage('Push Docker Image') {
+            steps {
                script {
-                    sh "docker rmi ${IMAGE_NAME}:${IMAGE_TAG}"
-                    sh "docker rmi ${IMAGE_NAME}:latest"
-               }
-          }
-       }
-
+                   // This step should not normally be used in your script. Consult the inline help for details.
+                   withDockerRegistry(credentialsId: 'docker-credentials', toolName: 'docker') {
+                    // some block
+                sh "docker push  ngwa23/registrationapp:v1"    
+             }
+            
+            }
+         }
+           
+         }
+        
+        stage('RemoveDockerImages'){
+            steps {
+            sh 'docker rmi -f ngwa23/registrationapp:v1'
+             }
+        }
+        
+        stage('manualApproval'){
+            steps {
+          sh "echo Review the application and confirm its performance within 5 hours"
+      timeout(time:5, unit:'HOURS') {
+       input message: 'Dear Client Ici Sr DevOps NGWA your Application is ready for deployment into K8S, Please review and approve'  
+      }
+     }
+        } 
        stage("Trigger CD Pipeline") {
             steps {
                 script {
-                    sh "curl -v -k --user clouduser:${JENKINS_API_TOKEN} -X POST -H 'cache-control: no-cache' -H 'content-type: application/x-www-form-urlencoded' --data 'IMAGE_TAG=${IMAGE_TAG}' 'ec2-13-232-128-192.ap-south-1.compute.amazonaws.com:8080/job/gitops-register-app-cd/buildWithParameters?token=gitops-token'"
+                    sh "curl -v -k --user NGWA CLOVIS OCHANG:${JENKINS_API_TOKEN} -X POST -H 'cache-control: no-cache' -H 'content-type: application/x-www-form-urlencoded' --data 'IMAGE_TAG=${IMAGE_TAG}' 'http://192.168.244.145:8080/job/REGISTRATION-APP-CD/buildWithParameters?token=gitops-token'"
                 }
             }
        }
-    }
+        
+         /*
+        stage('Deploy To Kubernetes') {
+            steps {
+            withKubeConfig(caCertificate: '', clusterName: 'kubernetes', contextName: '', credentialsId: 'k8s-cred', namespace: 'webapps', restrictKubeConfigAccess: false, serverUrl: 'https://172.16.59.134:6443') {
+              // some block
 
+                 sh "kubectl apply -f deployment-service.yaml"  
+                }
+            }
+        }
+     
+        
+        
+        stage('Verify the Deployment') {
+            steps {
+              withKubeConfig(caCertificate: '', clusterName: 'kubernetes', contextName: '', credentialsId: 'k8s-cred', namespace: 'webapps', restrictKubeConfigAccess: false, serverUrl: 'https://172.16.59.134:6443') {
+               // some block
+
+                    sh "kubectl get pods -n webapps"
+                   sh "kubectl get svc -n webapps"
+                }
+             }
+        }
+        */
+     }  
+     
     post {
-       failure {
-             emailext body: '''${SCRIPT, template="groovy-html.template"}''', 
-                      subject: "${env.JOB_NAME} - Build # ${env.BUILD_NUMBER} - Failed", 
-                      mimeType: 'text/html',to: "ashfaque.s510@gmail.com"
-      }
-      success {
-            emailext body: '''${SCRIPT, template="groovy-html.template"}''', 
-                     subject: "${env.JOB_NAME} - Build # ${env.BUILD_NUMBER} - Successful", 
-                     mimeType: 'text/html',to: "ashfaque.s510@gmail.com"
-      }      
-   }
+    always {
+        script {
+            def jobName = env.JOB_NAME
+            def buildNumber = env.BUILD_NUMBER
+            def pipelineStatus = currentBuild.result ?: 'UNKNOWN'
+            def bannerColor = pipelineStatus.toUpperCase() == 'SUCCESS' ? 'green' : 'red'
+
+            def body = """
+                <html>
+                <body>
+                <div style="border: 4px solid ${bannerColor}; padding: 10px;">
+                <h2>${jobName} - Build ${buildNumber}</h2>
+                <div style="background-color: ${bannerColor}; padding: 10px;">
+                <h3 style="color: white;">Pipeline Status: ${pipelineStatus.toUpperCase()}</h3>
+                </div>
+                <p>Check the <a href="${BUILD_URL}">console output</a>.</p>
+                </div>
+                </body>
+                </html>
+            """
+
+            emailext (
+                subject: "${jobName} - Build ${buildNumber} - ${pipelineStatus.toUpperCase()}",
+                body: body,
+                to: 'ngwaco23@gmail.com',
+                from: 'jenkins@example.com',
+                replyTo: 'jenkins@example.com',
+                mimeType: 'text/html',
+                attachmentsPattern: 'trivy-image-report.html'
+            )
+       }
+    }
 }
+}
+
