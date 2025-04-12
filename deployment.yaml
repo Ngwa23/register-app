@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: register-app
-          image: ngwa23/registrationapp:v4
+          image: ngwa23/registrationapp:v5
           resources:
             limits:
               memory: "256Mi"
